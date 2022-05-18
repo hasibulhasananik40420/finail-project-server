@@ -11,6 +11,7 @@ app.use(express.json())
 
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
+// const verify = require('jsonwebtoken/verify');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nivp9.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
@@ -38,11 +39,25 @@ async function run() {
       const serviceCollection = client.db("finalproject").collection("services")
       const bookingCollection = client.db("finalproject").collection("booking")
       const userCollection = client.db("finalproject").collection("user")
+      const docterCollection = client.db("finalproject").collection("docters")
       console.log('db connected')
+
+
+      const verifyAdmin =async(req,res,next)=>{
+          const requester = req.decoded.email
+          const requesterAccount= await userCollection.findOne({email:requester})
+          if(requesterAccount.role === 'admin'){
+            next()
+          }
+          else{
+           res.status(403).send({message:'Forbiden access'})
+          }
+      }
+
 
        app.get('/service', async(req,res)=>{
            const query = {}
-           const cursor = serviceCollection.find(query)
+           const cursor = serviceCollection.find(query).project({name:1})
            const services =await cursor.toArray()
            res.send(services)
        })
@@ -75,11 +90,8 @@ async function run() {
           res.send({admin:isAdmin})
          })
 
-         app.put('/user/admin/:email',verifyJWT, async(req,res)=>{
+         app.put('/user/admin/:email',verifyJWT,verifyAdmin, async(req,res)=>{
           const email = req.params.email
-          const requester = req.decoded.email
-          const requesterAccount= await userCollection.findOne({email:requester})
-          if(requesterAccount.role === 'admin'){
             const filter = {email:email}
             const updateDoc = {
   
@@ -87,11 +99,6 @@ async function run() {
             };
             const result= await userCollection.updateOne(filter, updateDoc)
             res.send(result)
-          }
-          else{
-           res.status(403).send({message:'Forbiden access'})
-          }
-         
       })
 
 
@@ -141,6 +148,29 @@ async function run() {
          const result = await bookingCollection.insertOne(booking) 
          res.send({success:true ,result})
        })
+
+
+         //load all docter
+         app.get('/doctors' , verifyJWT, verifyAdmin, async(req,res)=>{
+           const doctors = await docterCollection.find().toArray()
+           res.send(doctors)
+         })
+
+        app.post('/docter',verifyJWT,verifyAdmin, async (req,res)=>{
+          const docter = req.body 
+          const result = await docterCollection.insertOne(docter)
+          res.send(result)
+        })
+
+        
+        app.delete('/doctor/:email', verifyJWT, verifyAdmin, async (req, res) => {
+          const email = req.params.email;
+          const filter = { email: email };
+          const result = await docterCollection.deleteOne(filter);
+          res.send(result);
+        })
+
+
 
 
     } 
